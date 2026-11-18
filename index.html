@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة توزيع الدخان السحابي | Van Sales Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Tajawal -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Tajawal', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669', 700: '#047857', 900: '#064e3b' },
+                        dark: { 800: '#1e293b', 900: '#0f172a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Tajawal', sans-serif; -webkit-tap-highlight-color: transparent; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slideUp 0.25s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col select-none sm:select-auto">
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 left-4 right-4 sm:right-auto sm:w-96 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ==================== LOGIN SCREEN ==================== -->
+    <div id="login-screen" class="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-dark-900 via-dark-800 to-brand-900 text-white">
+        <div class="max-w-md w-full bg-white text-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl animate-slide-up">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-brand-600 text-white rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg shadow-brand-600/30">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <h1 class="text-2xl font-black text-slate-800">توزيع الدخان (سحابي Firebase)</h1>
+                <p class="text-xs text-slate-500 mt-1">البيانات متزامنة ومحفوظة بالكامل عبر السحابة</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-2xl mb-6">
+                <button type="button" onclick="selectLoginRole('admin')" id="role-btn-admin" class="py-2.5 rounded-xl text-sm font-bold bg-white text-brand-700 shadow-xs transition-all">الإدارة</button>
+                <button type="button" onclick="selectLoginRole('rep')" id="role-btn-rep" class="py-2.5 rounded-xl text-sm font-bold text-slate-500 transition-all">المندوب</button>
+            </div>
+
+            <!-- Admin Login -->
+            <form id="login-admin-panel" onsubmit="loginAsAdmin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">البريد الإلكتروني للإدارة</label>
+                    <input type="email" id="admin-email" required value="admin@tobacco.com" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">كلمة المرور</label>
+                    <input type="password" id="admin-pass" required value="123456" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md">تسجيل دخول المدير</button>
+            </form>
+
+            <!-- Rep Login -->
+            <form id="login-rep-panel" onsubmit="loginAsRep(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">إيميل المندوب</label>
+                    <input type="email" id="rep-email" required placeholder="rep1@tobacco.com" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">كلمة المرور</label>
+                    <input type="password" id="rep-pass" required placeholder="••••••••" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md">دخول المندوب وتفعيل التتبع</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN APP SHELL ==================== -->
+    <div id="app-shell" class="hidden flex-1 flex flex-col min-h-screen pb-20 md:pb-0 md:pr-64">
+        <aside class="hidden md:flex fixed top-0 right-0 bottom-0 w-64 bg-dark-900 text-slate-300 flex-col z-30 shadow-xl">
+            <div class="p-5 border-b border-slate-800 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xl font-bold">
+                    <i class="fa-solid fa-cloud"></i>
+                </div>
+                <div>
+                    <h2 class="font-bold text-white text-base">توزيع الدخان</h2>
+                    <span id="role-badge-sidebar" class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">متصل سحابياً</span>
+                </div>
+            </div>
+            <nav id="desktop-nav" class="flex-1 p-3 space-y-1.5 overflow-y-auto"></nav>
+            <div class="p-4 border-t border-slate-800">
+                <button onclick="logout()" class="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-red-500/10 text-xs font-bold text-red-400">
+                    <i class="fa-solid fa-right-from-bracket"></i> تسجيل خروج
+                </button>
+            </div>
+        </aside>
+
+        <header class="sticky top-0 bg-white/95 border-b border-slate-200 px-4 py-3 flex items-center justify-between z-20 shadow-2xs">
+            <div class="flex items-center gap-3">
+                <div id="header-avatar" class="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-black text-base">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+                <div>
+                    <h1 id="header-title" class="font-extrabold text-slate-800 text-base sm:text-lg">لوحة الإدارة</h1>
+                    <p id="header-subtitle" class="text-xs text-slate-500">مدير النظام والمستودع</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="bg-slate-900 text-white px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-bold">
+                    <span>1$ =</span> <span id="header-rate-val">15,000 ل.س</span>
+                </div>
+                <button onclick="logout()" class="md:hidden w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
+            <!-- VIEW: DASHBOARD -->
+            <section id="view-dashboard" class="space-y-6">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200">
+                        <span class="text-xs font-bold text-slate-400">رصيد الصندوق المعتمد ($)</span>
+                        <p id="kpi-cash" class="text-xl font-black text-slate-800 mt-2">$0.00</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200">
+                        <span class="text-xs font-bold text-slate-400">صافي الأرباح الكلية</span>
+                        <p id="kpi-profit" class="text-xl font-black text-brand-700 mt-2">$0.00</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200">
+                        <span class="text-xs font-bold text-slate-400">أرباح الشهر الحالي</span>
+                        <p id="kpi-monthly-profit" class="text-xl font-black text-blue-700 mt-2">$0.00</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200">
+                        <span class="text-xs font-bold text-slate-400">إجمالي الكراتين</span>
+                        <p id="kpi-stock" class="text-xl font-black text-slate-800 mt-2">0</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+                        <h3 class="font-extrabold text-slate-800 text-base border-b border-slate-100 pb-3"><i class="fa-solid fa-sliders text-brand-600 ml-1"></i> سعر الصرف (للمدير حصراً)</h3>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">تسعيرة صرف الدولار (ل.س)</label>
+                            <div class="flex gap-2">
+                                <input type="number" id="admin-rate-input" class="flex-1 bg-slate-50 border rounded-xl px-3 py-2 text-sm font-black">
+                                <button onclick="updateExchangeRate()" class="bg-slate-900 text-white font-bold px-4 py-2 rounded-xl text-xs">تحديث</button>
+                            </div>
+                        </div>
+                        <button onclick="exportMonthlyReportExcel()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md flex items-center justify-center gap-2 mt-4">
+                            <i class="fa-solid fa-file-excel text-base"></i>
+                            <span>تصدير تقرير الإكسل وإرسال عبر الواتساب</span>
+                        </button>
+                    </div>
+
+                    <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+                        <h3 class="font-extrabold text-slate-800 text-base border-b border-slate-100 pb-3"><i class="fa-solid fa-chart-pie text-brand-600 ml-1"></i> تحليل أرباح الأصناف (كل صنف على حدة)</h3>
+                        <div id="product-profits-breakdown" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: WAREHOUSE -->
+            <section id="view-warehouse" class="space-y-5 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-extrabold text-slate-800">إدارة المستودع الرئيسي</h2>
+                    <button onclick="openProductModal()" class="bg-brand-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm">إضافة صنف دخان</button>
+                </div>
+                <div id="warehouse-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </section>
+
+            <!-- VIEW: VANS -->
+            <section id="view-vans" class="space-y-5 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-extrabold text-slate-800">السيارات وإدارة حسابات المناديب</h2>
+                    <button onclick="openAddRepModal()" class="bg-slate-800 text-white font-bold px-3.5 py-2.5 rounded-xl text-xs"><i class="fa-solid fa-user-plus ml-1"></i> إضافة مندوب جديد</button>
+                </div>
+                <div id="vans-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </section>
+
+            <!-- VIEW: SALES -->
+            <section id="view-sales" class="space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 h-fit">
+                        <h3 class="font-extrabold text-slate-800 text-base mb-4 border-b pb-3">إصدار فاتورة مبيعات ($)</h3>
+                        <form onsubmit="submitInvoice(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">اسم الزبون / المحل</label>
+                                <input type="text" id="sale-customer" required placeholder="مثال: بقالة البركة" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">صنف الدخان</label>
+                                <select id="sale-product-id" onchange="calcSaleTotal()" class="w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold"></select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">الكمية (كرتونة)</label>
+                                    <input type="number" id="sale-qty" min="1" value="1" required class="w-full bg-slate-50 border rounded-xl p-3 text-center text-sm font-black">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-600 mb-1">سعر الكرتونة ($)</label>
+                                    <input type="number" id="sale-price" step="0.01" required class="w-full bg-slate-50 border rounded-xl p-3 text-center text-sm font-black text-brand-700 bg-emerald-50/50">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="paymentType" value="cash" checked class="peer hidden">
+                                    <div class="p-2.5 rounded-xl border text-center text-xs font-bold text-slate-600 peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700">نقدي (كاش)</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="paymentType" value="credit" class="peer hidden">
+                                    <div class="p-2.5 rounded-xl border text-center text-xs font-bold text-slate-600 peer-checked:bg-amber-50 peer-checked:border-amber-500 peer-checked:text-amber-700">آجل (ذمم)</div>
+                                </label>
+                            </div>
+                            <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md">إرسال واعتماد الفاتورة سحابياً</button>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200">
+                        <h3 class="font-extrabold text-slate-800 text-base mb-4 border-b pb-3">سجل المبيعات اللحظي</h3>
+                        <div id="sales-list-container" class="space-y-3 max-h-[500px] overflow-y-auto"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: DEBTS -->
+            <section id="view-debts" class="space-y-5 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-extrabold text-slate-800">إدارة الديون والتحصيل</h2>
+                    <span id="total-market-debt" class="bg-amber-50 text-amber-700 px-4 py-2 rounded-xl font-black">$0.00</span>
+                </div>
+                <div id="debts-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </section>
+
+            <!-- VIEW: SETTLEMENT -->
+            <section id="view-settlement" class="space-y-6 hidden">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <div class="flex justify-between items-center border-b pb-3">
+                        <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-calculator text-brand-600 ml-1"></i> تسوية الصندوق وتصفير حسابات المناديب</h2>
+                        <span class="text-xs bg-brand-50 text-brand-700 font-bold px-3 py-1 rounded-xl">لوحة الإدارة المركزية</span>
+                    </div>
+                    <div id="settlement-body" class="space-y-4"></div>
+                </div>
+            </section>
+        </main>
+
+        <nav id="mobile-bottom-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-1.5 flex items-center justify-around z-30"></nav>
+    </div>
+
+    <!-- MODALS -->
+    <div id="modal-product" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="font-extrabold text-lg mb-4">إضافة صنف دخان جديد للمستودع</h3>
+            <form onsubmit="handleSaveProduct(event)" class="space-y-3">
+                <input type="text" id="prod-name" required placeholder="اسم الصنف (مثال: مالبورو)" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="number" id="prod-cartons" value="20" placeholder="الكراتين" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                    <input type="number" id="prod-price" value="45" step="0.01" placeholder="سعر الكرتونة ($)" class="w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold text-brand-700">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 text-white font-bold py-3 rounded-xl">حفظ سحابياً</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-add-rep" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="font-extrabold text-lg mb-4">إنشاء حساب مندوب جديد</h3>
+            <form onsubmit="handleAddRep(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">اسم المندوب</label>
+                    <input type="text" id="new-rep-name" required placeholder="مثال: سامر" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">رقم السيارة / الفان</label>
+                    <input type="text" id="new-rep-car" required placeholder="مثال: فان 102" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">إيميل الدخول للمندوب</label>
+                    <input type="email" id="new-rep-email" required placeholder="samer@tobacco.com" dir="ltr" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">كلمة المرور</label>
+                    <input type="password" id="new-rep-pass" required placeholder="••••••••" dir="ltr" class="w-full bg-slate-50 border rounded-xl p-3 text-sm">
+                </div>
+                <button type="submit" class="w-full bg-slate-800 text-white font-bold py-3 rounded-xl shadow-md">حفظ سحابياً</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-edit-rep" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="font-extrabold text-lg mb-4">تعديل كلمة سر المندوب</h3>
+            <form onsubmit="handleUpdateRepPassword(event)" class="space-y-3">
+                <input type="hidden" id="edit-rep-id">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">كلمة المرور الجديدة</label>
+                    <input type="text" id="edit-rep-pass" required placeholder="أدخل كلمة المرور الجديدة" dir="ltr" class="w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 text-white font-bold py-3 rounded-xl shadow-md">تحديث الحفظ سحابياً</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- FIREBASE & APP LOGIC -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBIJAzBqB2ocEEO3ngGkQfMpu2ZzZDdays",
+            authDomain: "mohammed-21739.firebaseapp.com",
+            databaseURL: "https://mohammed-21739-default-rtdb.firebaseio.com",
+            projectId: "mohammed-21739",
+            storageBucket: "mohammed-21739.firebasestorage.app",
+            messagingSenderId: "712301007178",
+            appId: "1:712301007178:web:0d7e8e55e06df5dedeb1b3",
+            measurementId: "G-K48H2GQ1WX"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        window.state = {
+            exchangeRate: 15000,
+            approvedCashUSD: 0,
+            products: [
+                { id: 1, name: 'مالبورو أحمر', cartons: 30, priceCarton: 45, costCarton: 40 },
+                { id: 2, name: 'وينستون أزرق', cartons: 50, priceCarton: 34, costCarton: 30 }
+            ],
+            reps: [
+                { id: 1, name: 'محمد حسن', carNum: 'فان 101', email: 'rep1@tobacco.com', pass: '123456', location: null, lastUpdate: 'لم يتم الرصد بعد' }
+            ],
+            invoices: []
+        };
+
+        window.session = { role: null, repId: null, currentView: 'dashboard' };
+
+        // جلب البيانات ومزامنتها لحظياً بشكل دائم ودون ضياع عند التحديث
+        db.ref('van_sales_state').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                window.state.exchangeRate = data.exchangeRate !== undefined ? data.exchangeRate : 15000;
+                window.state.approvedCashUSD = data.approvedCashUSD !== undefined ? data.approvedCashUSD : 0;
+                window.state.products = data.products && data.products.length ? data.products : window.state.products;
+                window.state.reps = data.reps && data.reps.length ? data.reps : window.state.reps;
+                window.state.invoices = data.invoices || [];
+            } else {
+                syncStateToCloud();
+            }
+            if (window.session.role) {
+                renderActiveView();
+            }
+        });
+
+        function syncStateToCloud() {
+            db.ref('van_sales_state').set(window.state);
+        }
+
+        function selectLoginRole(role) {
+            const btnAdmin = document.getElementById('role-btn-admin');
+            const btnRep = document.getElementById('role-btn-rep');
+            const panelAdmin = document.getElementById('login-admin-panel');
+            const panelRep = document.getElementById('login-rep-panel');
+
+            if (role === 'admin') {
+                btnAdmin.className = 'py-2.5 rounded-xl text-sm font-bold bg-white text-brand-700 shadow-xs transition-all';
+                btnRep.className = 'py-2.5 rounded-xl text-sm font-bold text-slate-500 transition-all';
+                panelAdmin.classList.remove('hidden');
+                panelRep.classList.add('hidden');
+            } else {
+                btnRep.className = 'py-2.5 rounded-xl text-sm font-bold bg-white text-blue-700 shadow-xs transition-all';
+                btnAdmin.className = 'py-2.5 rounded-xl text-sm font-bold text-slate-500 transition-all';
+                panelRep.classList.remove('hidden');
+                panelAdmin.classList.add('hidden');
+            }
+        }
+
+        function startAutoLocationTracking() {
+            if ("geolocation" in navigator && window.session.role === 'rep') {
+                navigator.geolocation.watchPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const timeStr = new Date().toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
+                    const rep = window.state.reps.find(r => r.id === window.session.repId);
+                    if (rep) {
+                        rep.location = { lat, lng };
+                        rep.lastUpdate = timeStr;
+                        syncStateToCloud();
+                    }
+                }, (error) => { console.log('Location error:', error); }, { enableHighAccuracy: true });
+            }
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl text-xs font-bold animate-slide-up';
+            el.innerText = msg;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+
+        function loginAsAdmin(e) {
+            e.preventDefault();
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-pass').value;
+            if(email === 'admin@tobacco.com' && pass === '123456') {
+                window.session = { role: 'admin', repId: null, currentView: 'dashboard' };
+                showToast('تم تسجيل دخول المدير بنجاح عبر السحابة');
+                enterApp();
+            } else {
+                showToast('خطأ في إيميل أو كلمة مرور المدير', 'error');
+            }
+        }
+
+        function loginAsRep(e) {
+            e.preventDefault();
+            const email = document.getElementById('rep-email').value.trim().toLowerCase();
+            const pass = document.getElementById('rep-pass').value;
+
+            const rep = window.state.reps.find(r => r.email.toLowerCase() === email && String(r.pass) === String(pass));
+            
+            if (rep) {
+                window.session = { role: 'rep', repId: rep.id, currentView: 'sales' };
+                showToast(`أهلاً بك يا ${rep.name}، تم الاتصال بالسحابة بنجاح`);
+                startAutoLocationTracking();
+                enterApp();
+            } else {
+                showToast('بيانات دخول المندوب غير صحيحة أو الحساب غير موجود', 'error');
+            }
+        }
+
+        function logout() {
+            window.session = { role: null, repId: null, currentView: 'dashboard' };
+            document.getElementById('app-shell').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+        }
+
+        function enterApp() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-shell').classList.remove('hidden');
+            const isAdmin = window.session.role === 'admin';
+
+            const navItems = isAdmin ? [
+                { id: 'dashboard', label: 'الرئيسية', icon: 'fa-chart-pie' },
+                { id: 'warehouse', label: 'المستودع', icon: 'fa-warehouse' },
+                { id: 'vans', label: 'إدارة المناديب', icon: 'fa-users-gear' },
+                { id: 'sales', label: 'المبيعات اللحظية', icon: 'fa-receipt' },
+                { id: 'debts', label: 'الديون', icon: 'fa-hand-holding-dollar' },
+                { id: 'settlement', label: 'التسوية اليومية', icon: 'fa-calculator' }
+            ] : [
+                { id: 'sales', label: 'المبيعات', icon: 'fa-receipt' },
+                { id: 'debts', label: 'الديون', icon: 'fa-hand-holding-dollar' },
+                { id: 'settlement', label: 'التسوية اليومية', icon: 'fa-calculator' }
+            ];
+
+            document.getElementById('desktop-nav').innerHTML = navItems.map(i => `
+                <button onclick="switchView('${i.id}')" id="dnav-${i.id}" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid ${i.icon} w-5"></i><span>${i.label}</span>
+                </button>
+            `).join('');
+
+            document.getElementById('mobile-bottom-nav').innerHTML = navItems.map(i => `
+                <button onclick="switchView('${i.id}')" class="flex flex-col items-center justify-center py-1 px-1.5 text-slate-400 flex-1">
+                    <i class="fa-solid ${i.icon} text-base mb-1"></i>
+                    <span class="text-[10px] font-bold">${i.label}</span>
+                </button>
+            `).join('');
+
+            switchView(isAdmin ? 'dashboard' : 'sales');
+            document.getElementById('header-title').innerText = isAdmin ? 'لوحة الإدارة السحابية' : 'نقطة بيع المندوب';
+            document.getElementById('role-badge-sidebar').innerText = isAdmin ? 'مدير النظام' : 'مندوب توزيع';
+            document.getElementById('header-rate-val').innerText = window.state.exchangeRate.toLocaleString('en-US') + ' ل.س';
+        }
+
+        function switchView(viewId) {
+            window.session.currentView = viewId;
+            ['dashboard', 'warehouse', 'vans', 'sales', 'debts', 'settlement'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(`view-${viewId}`);
+            if (target) target.classList.remove('hidden');
+            renderActiveView();
+        }
+
+        function renderActiveView() {
+            const v = window.session.currentView;
+            if (v === 'dashboard') renderDashboard();
+            if (v === 'warehouse') renderWarehouse();
+            if (v === 'vans') renderVans();
+            if (v === 'sales') renderSales();
+            if (v === 'debts') renderDebts();
+            if (v === 'settlement') renderSettlement();
+        }
+
+        function renderDashboard() {
+            document.getElementById('admin-rate-input').value = window.state.exchangeRate;
+            const totalStock = window.state.products.reduce((s, p) => s + p.cartons, 0);
+            const totalProfit = window.state.invoices.reduce((s, i) => s + i.profit, 0);
+
+            const currentMonth = new Date().getMonth();
+            const monthlyProfit = window.state.invoices.filter(i => new Date(i.timestamp).getMonth() === currentMonth).reduce((s, i) => s + i.profit, 0);
+
+            const unapprovedCash = window.state.invoices.filter(i => i.type === 'cash' && !i.settled).reduce((s, i) => s + i.total, 0);
+            const totalCashInBox = (window.state.approvedCashUSD || 0) + unapprovedCash;
+
+            document.getElementById('kpi-cash').innerText = '$' + totalCashInBox.toFixed(2);
+            document.getElementById('kpi-profit').innerText = '$' + totalProfit.toFixed(2);
+            document.getElementById('kpi-monthly-profit').innerText = '$' + monthlyProfit.toFixed(2);
+            document.getElementById('kpi-stock').innerText = totalStock + ' كرتونة';
+
+            const profitByProduct = {};
+            window.state.products.forEach(p => profitByProduct[p.name] = 0);
+            window.state.invoices.forEach(i => {
+                if (profitByProduct[i.productName] !== undefined) {
+                    profitByProduct[i.productName] += i.profit;
+                } else {
+                    profitByProduct[i.productName] = i.profit;
+                }
+            });
+
+            document.getElementById('product-profits-breakdown').innerHTML = Object.entries(profitByProduct).map(([name, profit]) => `
+                <div class="p-3 bg-slate-50 border rounded-xl flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700">${name}</span>
+                    <span class="text-xs font-black text-brand-700 bg-emerald-50 px-2 py-1 rounded-md">$${profit.toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderWarehouse() {
+            document.getElementById('warehouse-grid').innerHTML = window.state.products.map(p => `
+                <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                    <h3 class="font-extrabold text-slate-800 text-base mb-1">${p.name}</h3>
+                    <p class="text-xs text-slate-500 mb-2">المتوفر: <b>${p.cartons} كرتونة</b></p>
+                    <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs">
+                        <span class="font-bold text-slate-600">سعر الكرتونة:</span>
+                        <span class="font-black text-brand-700">$${p.priceCarton}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openProductModal() { openModal('modal-product'); }
+        function handleSaveProduct(e) {
+            e.preventDefault();
+            const name = document.getElementById('prod-name').value;
+            const cartons = Number(document.getElementById('prod-cartons').value);
+            const price = Number(document.getElementById('prod-price').value);
+            window.state.products.push({ id: Date.now(), name, cartons, priceCarton: price, costCarton: price * 0.8 });
+            syncStateToCloud();
+            closeModal('modal-product');
+            showToast('تمت إضافة الصنف وحفظه سحابياً');
+            renderWarehouse();
+        }
+
+        function renderVans() {
+            document.getElementById('vans-grid').innerHTML = window.state.reps.map(r => {
+                const locText = r.location ? `خط عرض: ${r.location.lat.toFixed(4)}، خط طول: ${r.location.lng.toFixed(4)}` : 'بانتظار رصد الموقع الحي للمندوب';
+                return `
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-extrabold text-slate-800 text-base">${r.name}</h3>
+                                <span class="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-md mt-1 inline-block">${r.carNum}</span>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <button onclick="openEditRepModal(${r.id})" class="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-xs" title="تعديل كلمة السر">
+                                    <i class="fa-solid fa-key"></i>
+                                </button>
+                                <button onclick="deleteRep(${r.id})" class="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center text-xs" title="حذف المندوب">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-500">الإيميل: <b dir="ltr" class="text-slate-700">${r.email}</b></p>
+                        <div class="p-2.5 bg-slate-50 rounded-xl text-xs space-y-1">
+                            <p class="font-bold text-slate-700"><i class="fa-solid fa-location-dot text-red-500 ml-1"></i> تتبع الموقع اللحظي:</p>
+                            <p class="text-[11px] text-slate-600 font-mono">${locText}</p>
+                            <p class="text-[10px] text-slate-400">آخر تحديث: ${r.lastUpdate}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openAddRepModal() { openModal('modal-add-rep'); }
+        function handleAddRep(e) {
+            e.preventDefault();
+            const name = document.getElementById('new-rep-name').value;
+            const carNum = document.getElementById('new-rep-car').value;
+            const email = document.getElementById('new-rep-email').value.trim().toLowerCase();
+            const pass = document.getElementById('new-rep-pass').value;
+
+            window.state.reps.push({ id: Date.now(), name, carNum, email, pass, location: null, lastUpdate: 'لم يتصل بعد' });
+            syncStateToCloud();
+            closeModal('modal-add-rep');
+            showToast('تم إنشاء وحفظ حساب المندوب سحابياً');
+            renderVans();
+        }
+
+        function deleteRep(repId) {
+            if (window.state.reps.length <= 1) {
+                return showToast('لا يمكنك حذف جميع المناديب، يجب أن يبقى مندوب واحد على الأقل!', 'error');
+            }
+            if (confirm('هل أنت متأكد من حذف هذا المندوب نهائياً من السحابة؟')) {
+                window.state.reps = window.state.reps.filter(r => r.id !== repId);
+                syncStateToCloud();
+                showToast('تم حذف المندوب بنجاح');
+                renderVans();
+            }
+        }
+
+        function openEditRepModal(repId) {
+            const rep = window.state.reps.find(r => r.id === repId);
+            if (rep) {
+                document.getElementById('edit-rep-id').value = rep.id;
+                document.getElementById('edit-rep-pass').value = '';
+                openModal('modal-edit-rep');
+            }
+        }
+
+        function handleUpdateRepPassword(e) {
+            e.preventDefault();
+            const repId = Number(document.getElementById('edit-rep-id').value);
+            const newPass = document.getElementById('edit-rep-pass').value;
+
+            const rep = window.state.reps.find(r => r.id === repId);
+            if (rep) {
+                rep.pass = newPass;
+                syncStateToCloud();
+                closeModal('modal-edit-rep');
+                showToast('تم تحديث كلمة المرور للمندوب سحابياً');
+                renderVans();
+            }
+        }
+
+        function renderSales() {
+            document.getElementById('sale-product-id').innerHTML = window.state.products.map(p => `<option value="${p.id}" data-price="${p.priceCarton}">${p.name} ($${p.priceCarton})</option>`).join('');
+            calcSaleTotal();
+            
+            const isAdmin = window.session.role === 'admin';
+            const targetInvoices = isAdmin ? window.state.invoices : window.state.invoices.filter(i => i.repId === window.session.repId);
+
+            document.getElementById('sales-list-container').innerHTML = targetInvoices.length ? targetInvoices.slice().reverse().map(i => {
+                const repObj = window.state.reps.find(r => r.id === i.repId);
+                const repName = repObj ? repObj.name : 'مندوب عام';
+                return `
+                    <div class="p-3 bg-slate-50 rounded-xl flex justify-between text-xs items-center">
+                        <div>
+                            <b>${i.customer}</b> — ${i.productName} (${i.qty} كرتونة) [${i.type}] 
+                            ${isAdmin ? `<span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold mr-1">المندوب: ${repName}</span>` : ''}
+                            ${i.settled ? '<span class="text-emerald-600 font-bold mr-1">(مُسوى)</span>' : ''}
+                        </div>
+                        <div class="font-black text-brand-700">$${i.total}</div>
+                    </div>
+                `;
+            }).join('') : '<p class="text-xs text-slate-400 text-center py-4">لا توجد فواتير مبيعات مسجلة بعد</p>';
+        }
+
+        function calcSaleTotal() {
+            const select = document.getElementById('sale-product-id');
+            const selectedOption = select.options[select.selectedIndex];
+            if (selectedOption) {
+                document.getElementById('sale-price').value = selectedOption.getAttribute('data-price');
+            }
+        }
+
+        function submitInvoice(e) {
+            e.preventDefault();
+            const customer = document.getElementById('sale-customer').value;
+            const pId = Number(document.getElementById('sale-product-id').value);
+            const qty = Number(document.getElementById('sale-qty').value);
+            const price = Number(document.getElementById('sale-price').value);
+            const type = document.querySelector('input[name="paymentType"]:checked').value;
+            const prod = window.state.products.find(p => p.id === pId);
+
+            if (prod.cartons < qty) return showToast('الكمية غير متوفرة في المستودع!', 'error');
+            prod.cartons -= qty;
+
+            const total = price * qty;
+            const profit = (price - prod.costCarton) * qty;
+            const repId = window.session.role === 'rep' ? window.session.repId : (window.state.reps[0] ? window.state.reps[0].id : 1);
+
+            window.state.invoices.push({ 
+                id: Date.now(), 
+                customer, 
+                productName: prod.name, 
+                qty, 
+                total, 
+                profit, 
+                type, 
+                repId, 
+                settled: false, 
+                timestamp: Date.now() 
+            });
+            
+            syncStateToCloud();
+            document.getElementById('sale-customer').value = '';
+            showToast('تم إصدار الفاتورة وتحديثها سحابياً للجميع بنجاح');
+            renderSales();
+        }
+
+        function renderDebts() {
+            const credits = window.state.invoices.filter(i => i.type === 'credit');
+            const total = credits.reduce((s, i) => s + i.total, 0);
+            document.getElementById('total-market-debt').innerText = '$' + total.toFixed(2);
+            document.getElementById('debts-grid').innerHTML = credits.length ? credits.map(i => `
+                <div class="bg-white p-5 rounded-2xl border">
+                    <h3 class="font-bold">${i.customer}</h3>
+                    <p class="text-xs text-slate-500 mt-1">${i.productName} (${i.qty} كرتونة)</p>
+                    <p class="text-xs text-amber-700 mt-2 font-black">المبلغ الذمة: $${i.total}</p>
+                </div>
+            `).join('') : '<p class="text-xs text-slate-400 text-center py-6 col-span-full">لا توجد ديون آجلة</p>';
+        }
+
+        function renderSettlement() {
+            const isAdmin = window.session.role === 'admin';
+            const container = document.getElementById('settlement-body');
+
+            if (!isAdmin) {
+                const repInvoices = window.state.invoices.filter(i => i.repId === window.session.repId && !i.settled);
+                const repCash = repInvoices.filter(i => i.type === 'cash').reduce((s, i) => s + i.total, 0);
+                const repCredit = repInvoices.filter(i => i.type === 'credit').reduce((s, i) => s + i.total, 0);
+
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 bg-slate-50 border rounded-2xl text-center">
+                            <span class="text-xs text-slate-500 font-bold">كاش الذمة غير المسوى</span>
+                            <p class="text-xl font-black text-slate-800 mt-1">$${repCash.toFixed(2)}</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 border rounded-2xl text-center">
+                            <span class="text-xs text-slate-500 font-bold">المبيعات الآجلة</span>
+                            <p class="text-xl font-black text-amber-700 mt-1">$${repCredit.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 text-center pt-2">بانتظار قيام المدير باعتماد التسوية وتصفير الحساب سحابياً.</p>
+                `;
+                return;
+            }
+
+            let html = `<p class="text-xs text-slate-500">اختر المندوب لإتمام التسوية وتصفير حسابه ونقل الكاش لصندوق الإدارة الرئيسي سحابياً:</p>`;
+            html += `<div class="space-y-4">`;
+
+            window.state.reps.forEach(rep => {
+                const repInvoices = window.state.invoices.filter(i => i.repId === rep.id && !i.settled);
+                const repCash = repInvoices.filter(i => i.type === 'cash').reduce((s, i) => s + i.total, 0);
+                const repCredit = repInvoices.filter(i => i.type === 'credit').reduce((s, i) => s + i.total, 0);
+                const totalInvoicesCount = repInvoices.length;
+
+                html += `
+                    <div class="p-4 bg-slate-50 border rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h3 class="font-extrabold text-slate-800 text-base">${rep.name} <span class="text-xs text-slate-500 font-normal">(${rep.carNum})</span></h3>
+                            <div class="flex gap-4 mt-2 text-xs">
+                                <span class="bg-emerald-50 text-emerald-700 font-bold px-2.5 py-1 rounded-lg">كاش للتدوير: $${repCash.toFixed(2)}</span>
+                                <span class="bg-amber-50 text-amber-700 font-bold px-2.5 py-1 rounded-lg">ذمم: $${repCredit.toFixed(2)}</span>
+                                <span class="text-slate-500 font-semibold self-center">فواتير غير مسواة: ${totalInvoicesCount}</span>
+                            </div>
+                        </div>
+                        <button onclick="settleRepAccount(${rep.id})" class="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-5 py-3 rounded-xl text-xs shadow-md">
+                            <i class="fa-solid fa-check-double ml-1"></i> إتمام التسوية وتصفير الحساب
+                        </button>
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function settleRepAccount(repId) {
+            const repInvoices = window.state.invoices.filter(i => i.repId === repId && !i.settled);
+            const repCash = repInvoices.filter(i => i.type === 'cash').reduce((s, i) => s + i.total, 0);
+
+            if (repCash <= 0 && repInvoices.length === 0) {
+                return showToast('لا توجد مبالغ أو فواتير جديدة لتسويتها لهذا المندوب!', 'error');
+            }
+
+            if (confirm('هل أنت متأكد من إتمام التسوية سحابياً؟ سيتم تصفير حساب المندوب ونقل مبالغ الكاش لصندوق الإدارة الرئيسي.')) {
+                window.state.invoices.forEach(i => {
+                    if (i.repId === repId) {
+                        i.settled = true;
+                    }
+                });
+
+                window.state.approvedCashUSD = (window.state.approvedCashUSD || 0) + repCash;
+
+                syncStateToCloud();
+                showToast('تمت التسوية بنجاح وتصفير الحساب وتحديث الصندوق سحابياً!');
+                renderSettlement();
+            }
+        }
+
+        function exportMonthlyReportExcel() {
+            const totalProfit = window.state.invoices.reduce((s, i) => s + i.profit, 0);
+            const currentMonthProfit = window.state.invoices.filter(i => new Date(i.timestamp).getMonth() === new Date().getMonth()).reduce((s, i) => s + i.profit, 0);
+            
+            const reportText = `📊 *تقرير الأرباح والمبيعات السحابية - توزيع الدخان*
+---------------------------------------
+💰 إجمالي الأرباح الكلية: $${totalProfit.toFixed(2)}
+📅 أرباح الشهر الحالي: $${currentMonthProfit.toFixed(2)}
+💱 سعر الصرف: ${window.state.exchangeRate} ل.س
+📦 عدد الفواتير المسجلة: ${window.state.invoices.length}
+---------------------------------------
+تم إعداد التقرير وحفظه ومزامنته سحابياً بنجاح.`;
+
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(reportText)}`;
+            window.open(whatsappUrl, '_blank');
+            showToast('تم تجهيز التقرير وفتحه عبر الواتساب بنجاح');
+        }
+
+        function updateExchangeRate() {
+            if (window.session.role !== 'admin') return showToast('غير مسموح إلا للمدير!', 'error');
+            window.state.exchangeRate = Number(document.getElementById('admin-rate-input').value) || 15000;
+            syncStateToCloud();
+            document.getElementById('header-rate-val').innerText = window.state.exchangeRate.toLocaleString('en-US') + ' ل.س';
+            showToast('تم تحديث وحفظ سعر الصرف سحابياً');
+        }
+    </script>
+</body>
+</html>
